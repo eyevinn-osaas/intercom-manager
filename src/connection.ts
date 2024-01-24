@@ -1,4 +1,3 @@
-import { EventEmitter } from 'events';
 import { SessionDescription } from 'sdp-transform';
 
 import {
@@ -8,7 +7,7 @@ import {
 } from './sfu/interface';
 import { MediaStreamsInfo } from './media_streams_info';
 
-export class Connection extends EventEmitter {
+export class Connection {
   private resourceId: string;
   private connectionId: string;
   private nextMid = 0;
@@ -24,7 +23,6 @@ export class Connection extends EventEmitter {
     endpointDescription: SfuEndpointDescription,
     endpointId: string
   ) {
-    super();
     this.resourceId = resourceId;
     this.connectionId = endpointId;
     this.mediaStreams = mediaStreams;
@@ -172,6 +170,9 @@ export class Connection extends EventEmitter {
     if (!this.mediaStreams) {
       throw new Error('Missing endpointDescription audio');
     }
+    if (!this.mediaStreams.audio.ssrcs) {
+      throw new Error('Missing mediaStreams.audio.ssrcs');
+    }
 
     const audio = this.endpointDescription.audio;
     const audioPayloadType = audio['payload-type'];
@@ -234,9 +235,108 @@ export class Connection extends EventEmitter {
 
       offer.media.push(audioDescription);
     }
+
+    if (!this.mediaStreams.video) {
+      return;
+    }
+
+    if (!this.endpointDescription.video) {
+      return;
+    }
+    //If there is no video, none of the below processing is necessary
+
+    let videoMsLabels = new Set(
+      this.mediaStreams.video.ssrcs.flatMap((element) => element.mslabel)
+    );
+
+    console.log(videoMsLabels);
+
+    for (let msLabel of videoMsLabels) {
+      const video = this.endpointDescription.video;
+      let videoDescription = this.makeMediaDescription('video');
+      videoDescription.payloads = video['payload-types']
+        .flatMap((element) => element.id)
+        .join(' ');
+      videoDescription.rtp = video['payload-types'].flatMap((element) => {
+        return {
+          payload: element.id,
+          codec: element.name,
+          rate: element.clockrate,
+          encoding: element.channels
+        };
+      });
+      if (video['rtp-hdrexts']) {
+        videoDescription.ext = video['rtp-hdrexts'].flatMap((element) => {
+          return { value: element.id, uri: element.uri };
+        });
+      }
+
+      video['payload-types'].forEach((payloadType) => {
+        const parameters = Object.keys(payloadType.parameters);
+        if (parameters.length !== 0) {
+          videoDescription.fmtp.push({
+            payload: payloadType.id,
+            config: parameters
+              .map((element) => `${element}=${payloadType.parameters[element]}`)
+              .join(';')
+          });
+        }
+
+        if (payloadType['rtcp-fbs']) {
+          payloadType['rtcp-fbs'].forEach((rtcpFb) => {
+            videoDescription.rtcpFb.push({
+              payload: payloadType.id,
+              type: rtcpFb.type,
+              subtype: rtcpFb.subtype
+            });
+          });
+        }
+      });
+
+      for (let ssrc of this.mediaStreams.video.ssrcs.filter(
+        (element) => element.mslabel === msLabel
+      )) {
+        videoDescription.ssrcs.push({
+          id: ssrc.ssrc,
+          attribute: 'cname',
+          value: ssrc.cname
+        });
+        videoDescription.ssrcs.push({
+          id: ssrc.ssrc,
+          attribute: 'label',
+          value: ssrc.label
+        });
+        videoDescription.ssrcs.push({
+          id: ssrc.ssrc,
+          attribute: 'mslabel',
+          value: ssrc.mslabel
+        });
+        videoDescription.ssrcs.push({
+          id: ssrc.ssrc,
+          attribute: 'msid',
+          value: `${ssrc.mslabel} ${ssrc.label}`
+        });
+      }
+
+      videoDescription.ssrcGroups = this.mediaStreams.video.ssrcGroups.flatMap(
+        (element) => {
+          return {
+            semantics: element.semantics,
+            ssrcs: element.ssrcs.join(' ')
+          };
+        }
+      );
+      offer.media.push(videoDescription);
+    }
   }
 
   protected addSFUMids(offer: SessionDescription) {
+    if (!this.endpointDescription) {
+      throw new Error(
+        `Failed to add SFU Mids: endpointDescription does not exist`
+      );
+    }
+
     const dataDescription = this.makeMediaDescription('application');
     dataDescription.protocol = 'UDP/DTLS/SCTP';
     dataDescription.payloads = 'webrtc-datachannel';
@@ -245,6 +345,7 @@ export class Connection extends EventEmitter {
       app: 'webrtc-datachannel',
       maxMessageSize: 262144
     };
+
     offer.media.push(dataDescription);
   }
 }

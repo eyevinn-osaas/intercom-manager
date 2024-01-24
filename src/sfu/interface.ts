@@ -36,6 +36,15 @@ interface RtcpFeedback {
   subtype: string;
 }
 
+interface SfuPayloadType {
+  id: number;
+  name: string;
+  clockrate: number;
+  channels?: number;
+  parameters?: any;
+  'rtcp-fbs'?: RtcpFeedback[];
+}
+
 export interface AudioSmbPayloadParameters {
   minptime: string;
   useinbandfec: string;
@@ -72,6 +81,12 @@ export interface SfuEndpointDescription {
     ssrcs: number[];
     'payload-type': AudioSmbPayloadType;
     'rtp-hdrexts': SfuRtpHeaderExtension[];
+  };
+
+  video?: {
+    streams: SfuVideoStream[];
+    'payload-types': SfuPayloadType[];
+    'rtp-hdrexts'?: SfuRtpHeaderExtension[];
   };
 }
 

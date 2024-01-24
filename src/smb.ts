@@ -13,6 +13,7 @@ interface BaseAllocationRequest {
     sdes: boolean;
   };
   audio?: object;
+  video?: object;
   data?: object;
   idleTimeout?: number;
 }
@@ -45,6 +46,7 @@ export class SmbProtocol {
     conferenceId: string,
     endpointId: string,
     audio: boolean,
+    video: boolean,
     data: boolean,
     idleTimeout: number
   ): Promise<SmbEndpointDescription> {
@@ -60,6 +62,9 @@ export class SmbProtocol {
 
     if (audio) {
       request['audio'] = { 'relay-type': 'mixed' };
+    }
+    if (video) {
+      request['video'] = { 'relay-type': 'ssrc-rewrite' };
     }
     if (data) {
       request['data'] = {};

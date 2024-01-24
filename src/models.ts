@@ -36,19 +36,6 @@ export const AllocateConference = Type.Object({
   'global-port': Type.Boolean()
 });
 
-export const AllocateEndpoint = Type.Object({
-  action: Type.Literal('allocate'),
-  'bundle-transport': Type.Object({
-    'ice-controlling': Type.Boolean(),
-    ice: Type.Literal(true),
-    dtls: Type.Boolean(),
-    sdes: Type.Boolean()
-  }),
-  audio: Audio,
-  data: Type.Object({}),
-  idleTimeout: Type.Integer()
-});
-
 export const NewProduction = Type.Object({
   name: Type.String(),
   lines: Type.Array(
@@ -100,7 +87,7 @@ const AudioSmbPayloadParameters = Type.Object({
   useinbandfec: Type.String()
 });
 
-const AudioSmbPayloadType = Type.Object({
+const MediaPayloadType = Type.Object({
   id: Type.Number(),
   name: Type.String(),
   clockrate: Type.Number(),
@@ -114,13 +101,31 @@ const SmbRtpHeaderExtension = Type.Object({
   uri: Type.String()
 });
 
+const SfuVideoSource = Type.Object({
+  main: Type.Number(),
+  feedback: Type.Optional(Type.Number())
+});
+
+const SfuVideoStream = Type.Object({
+  sources: Type.Array(SfuVideoSource),
+  id: Type.String(),
+  content: Type.String()
+});
+
 export const SmbEndpointDescription = Type.Object({
   'bundle-transport': Type.Optional(SmbTransport),
   audio: Type.Object({
     ssrcs: Type.Array(Type.Number()),
-    'payload-type': AudioSmbPayloadType,
+    'payload-type': MediaPayloadType,
     'rtp-hdrexts': Type.Array(SmbRtpHeaderExtension)
   }),
+  video: Type.Optional(
+    Type.Object({
+      streams: Type.Array(SfuVideoStream),
+      'payload-types': Type.Array(MediaPayloadType),
+      'rtp-hdrexts': Type.Array(SmbRtpHeaderExtension)
+    })
+  ),
   data: Type.Optional(Type.Object({ port: Type.Number() })),
   idleTimeout: Type.Optional(Type.Number())
 });

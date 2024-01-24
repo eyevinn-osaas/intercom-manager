@@ -28,19 +28,37 @@ function createConnection(
     throw new Error('Missing audio when creating offer');
   }
 
-  const ssrcs: MediaStreamsInfoSsrc[] = [];
+  const audioSsrcs: MediaStreamsInfoSsrc[] = [];
   endpoint.audio.ssrcs.forEach((ssrcsNr) => {
-    ssrcs.push({
+    audioSsrcs.push({
       ssrc: ssrcsNr.toString(),
-      cname: `${username}_audioCName`,
-      mslabel: `${username}_audioMSLabel`,
-      label: `${username}_audioLabel`
+      cname: `${username}_audiocname`,
+      mslabel: `${username}_audiomslabel`,
+      label: `${username}_audio`
     });
   });
 
+  const videoSsrcs: MediaStreamsInfoSsrc[] = [];
+  let id = 0;
+  endpoint.video?.streams.forEach((stream) => {
+    videoSsrcs.push({
+      ssrc: stream.sources[0].main.toString(),
+      cname: `${username}_videoCName_${id}`,
+      mslabel: `${username}_videomslabel_${id}`,
+      label: `${username}_video_${id}`
+    });
+    id++;
+  });
+
+  console.log(videoSsrcs);
+
   const endpointMediaStreamInfo = {
     audio: {
-      ssrcs: ssrcs
+      ssrcs: audioSsrcs
+    },
+    video: {
+      ssrcs: videoSsrcs,
+      ssrcGroups: []
     }
   };
 
@@ -67,6 +85,7 @@ async function createEndpoint(
   smbServerUrl: string,
   lineId: string,
   endpointId: string,
+  video: boolean,
   audio: boolean,
   data: boolean,
   endpointIdleTimeout: number
@@ -76,6 +95,7 @@ async function createEndpoint(
     lineId,
     endpointId,
     audio,
+    video,
     data,
     endpointIdleTimeout
   );
@@ -100,10 +120,22 @@ async function handleAnswerRequest(
       'Missing endpointDescription audio when handling sdp answer from endpoint'
     );
   }
+
   endpointDescription.audio.ssrcs = [];
+  if (endpointDescription.video) {
+    endpointDescription.video.streams = [
+      {
+        id:'dummy_id',
+        sources: [],
+        content: 'video'
+      }
+    ];
+  }
 
   const parsedAnswer = parse(answer);
   const answerMediaDescription = parsedAnswer.media[0];
+
+  //Get audio ssrcs
   if (parsedAnswer.media[1].ssrcs) {
     let parsedSsrcs = parsedAnswer.media[1].ssrcs[0].id;
     if (typeof parsedSsrcs === 'string') {
@@ -115,6 +147,21 @@ async function handleAnswerRequest(
     throw new Error(
       'Missing audio ssrcs when handling sdp answer from endpoint'
     );
+  }
+
+  //Get video ssrcs
+  if (endpointDescription.video) {
+    if (parsedAnswer.media[2].ssrcs) {
+      let parsedSsrcs = parsedAnswer.media[2].ssrcs;
+      for (let ssrc of parsedSsrcs) {
+        if (typeof ssrc.id === 'string') {
+          ssrc.id = parseInt(ssrc.id, 10);
+        }
+        endpointDescription.video.streams[0].sources.push({
+          main: ssrc.id
+        });
+      }
+    }
   }
 
   const transport = endpointDescription['bundle-transport'];
@@ -160,6 +207,11 @@ async function handleAnswerRequest(
           network: element['network-id']
         };
       });
+
+  // if(endpointDescription.video){
+  //   console.log(endpointDescription.video.streams);
+  //   console.log(endpointDescription.video.streams[0].sources);
+  // }
 
   return await smb.configureEndpoint(
     smbServerUrl,
@@ -276,9 +328,9 @@ const apiProductions: FastifyPluginCallback<ApiProductionsOptions> = (
     {
       schema: {
         // description: 'Retrieves a Production.',
-        response: {
-          200: Production
-        }
+        // response: {
+        //   200: Production
+        // }
       }
     },
     async (request, reply) => {
@@ -301,9 +353,9 @@ const apiProductions: FastifyPluginCallback<ApiProductionsOptions> = (
     {
       schema: {
         // description: 'Retrieves lines for a Production.',
-        response: {
-          200: Type.Array(Line)
-        }
+        // response: {
+        //   200: Type.Array(Line)
+        // }
       }
     },
     async (request, reply) => {
@@ -326,9 +378,9 @@ const apiProductions: FastifyPluginCallback<ApiProductionsOptions> = (
     {
       schema: {
         // description: 'Retrieves an active Production line.',
-        response: {
-          200: Line
-        }
+        // response: {
+        //   200: Line
+        // }
       }
     },
     async (request, reply) => {
@@ -388,6 +440,7 @@ const apiProductions: FastifyPluginCallback<ApiProductionsOptions> = (
           line.id,
           endpointId,
           true,
+          true,
           false,
           parseInt(opts.endpointIdleTimeout, 10)
         );
@@ -429,9 +482,9 @@ const apiProductions: FastifyPluginCallback<ApiProductionsOptions> = (
     {
       schema: {
         //description: 'Provide client connection information to finalize line conference join.',
-        response: {
-          200: Line
-        }
+        // response: {
+        //   200: Line
+        // }
       }
     },
     async (request, reply) => {
