@@ -1,61 +1,40 @@
 import { Type } from '@sinclair/typebox';
+import dotenv from 'dotenv';
 import { FastifyPluginCallback } from 'fastify';
+import { v4 as uuidv4 } from 'uuid';
+import { CoreFunctions } from './api_productions_core_functions';
+import { DbManager } from './db/interface';
+import { Log } from './log';
 import {
-  NewProduction,
+  DetailedProductionResponse,
+  ErrorResponse,
   LineResponse,
+  NewProduction,
+  NewProductionLine,
+  NewSession,
+  PatchLine,
+  PatchLineResponse,
+  PatchProduction,
+  PatchProductionResponse,
+  ProductionListResponse,
+  ProductionResponse,
+  SdpAnswer,
+  SessionResponse,
   SmbEndpointDescription,
   UserResponse,
-  ProductionResponse,
-  DetailedProductionResponse,
-  UserSession,
-  NewSession,
-  SessionResponse,
-  SdpAnswer,
-  NewProductionLine,
-  ErrorResponse,
-  PatchLineResponse,
-  PatchLine,
-  ProductionListResponse,
-  PatchProduction,
-  PatchProductionResponse
+  UserSession
 } from './models';
-import { SmbProtocol } from './smb';
 import { ProductionManager } from './production_manager';
-import dotenv from 'dotenv';
-import { v4 as uuidv4 } from 'uuid';
-import { ConnectionQueue } from './connection_queue';
-import { CoreFunctions } from './api_productions_core_functions';
-import { Log } from './log';
-import { DbManagerMongoDb } from './db/mongodb';
-import { DbManagerCouchDb } from './db/couchdb';
+import { SmbProtocol } from './smb';
 dotenv.config();
-
-const DB_CONNECTION_STRING: string =
-  process.env.DB_CONNECTION_STRING ??
-  process.env.MONGODB_CONNECTION_STRING ??
-  'mongodb://localhost:27017/intercom-manager';
-let dbManager;
-const dbUrl = new URL(DB_CONNECTION_STRING);
-if (dbUrl.protocol === 'mongodb:') {
-  dbManager = new DbManagerMongoDb(dbUrl);
-} else if (dbUrl.protocol === 'http:' || dbUrl.protocol === 'https:') {
-  dbManager = new DbManagerCouchDb(dbUrl);
-} else {
-  throw new Error('Unsupported database protocol');
-}
-
-const productionManager = new ProductionManager(dbManager);
-const connectionQueue = new ConnectionQueue();
-const coreFunctions = new CoreFunctions(productionManager, connectionQueue);
-
-export function checkUserStatus() {
-  productionManager.checkUserStatus();
-}
 
 export interface ApiProductionsOptions {
   smbServerBaseUrl: string;
   endpointIdleTimeout: string;
   smbServerApiKey?: string;
+  dbManager: DbManager;
+  productionManager: ProductionManager;
+  coreFunctions: CoreFunctions;
 }
 
 const apiProductions: FastifyPluginCallback<ApiProductionsOptions> = (
@@ -69,6 +48,9 @@ const apiProductions: FastifyPluginCallback<ApiProductionsOptions> = (
   ).toString();
   const smb = new SmbProtocol();
   const smbServerApiKey = opts.smbServerApiKey || '';
+
+  const productionManager = opts.productionManager;
+  const coreFunctions = opts.coreFunctions;
 
   fastify.post<{
     Body: NewProduction;
@@ -595,8 +577,10 @@ const apiProductions: FastifyPluginCallback<ApiProductionsOptions> = (
           smbServerApiKey,
           smbConferenceId,
           endpointId,
-          true,
-          true,
+          true, // audio
+          true, // data
+          true, // iceControlling
+          'ssrc-rewrite', // relayType
           parseInt(opts.endpointIdleTimeout, 10)
         );
         if (!endpoint.audio) {
@@ -833,7 +817,6 @@ const apiProductions: FastifyPluginCallback<ApiProductionsOptions> = (
   next();
 };
 
-export async function getApiProductions() {
-  await productionManager.load();
+export function getApiProductions() {
   return apiProductions;
 }
