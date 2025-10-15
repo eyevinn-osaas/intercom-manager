@@ -25,7 +25,7 @@ const DB_CONNECTION_STRING: string =
   'mongodb://localhost:27017/intercom-manager';
 let dbManager;
 const dbUrl = new URL(DB_CONNECTION_STRING);
-if (dbUrl.protocol === 'mongodb:') {
+if (dbUrl.protocol === 'mongodb:' || dbUrl.protocol === 'mongodb+srv:') {
   dbManager = new DbManagerMongoDb(dbUrl);
 } else if (dbUrl.protocol === 'http:' || dbUrl.protocol === 'https:') {
   dbManager = new DbManagerCouchDb(dbUrl);
@@ -48,6 +48,7 @@ if (dbUrl.protocol === 'mongodb:') {
     endpointIdleTimeout: ENDPOINT_IDLE_TIMEOUT_S,
     smbServerApiKey: process.env.SMB_APIKEY,
     publicHost: PUBLIC_HOST,
+    whipAuthKey: process.env.WHIP_AUTH_KEY,
     dbManager: dbManager,
     productionManager: productionManager,
     ingestManager: ingestManager,
