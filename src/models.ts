@@ -79,17 +79,17 @@ export const AllocateEndpoint = Type.Object({
 });
 
 export const NewProduction = Type.Object({
-  name: Type.String(),
+  name: Type.String({ minLength: 1, maxLength: 200 }),
   lines: Type.Array(
     Type.Object({
-      name: Type.String(),
+      name: Type.String({ minLength: 1, maxLength: 200 }),
       programOutputLine: Type.Optional(Type.Boolean())
     })
   )
 });
 
 export const NewProductionLine = Type.Object({
-  name: Type.String(),
+  name: Type.String({ minLength: 1, maxLength: 200 }),
   programOutputLine: Type.Optional(Type.Boolean())
 });
 
@@ -305,9 +305,9 @@ export const DetailedProductionResponse = Type.Object({
 });
 
 export const NewSession = Type.Object({
-  productionId: Type.String(),
-  lineId: Type.String(),
-  username: Type.String()
+  productionId: Type.String({ minLength: 1, pattern: '^[0-9]+$' }),
+  lineId: Type.String({ minLength: 1 }),
+  username: Type.String({ minLength: 1, maxLength: 200 })
 });
 
 export const SessionResponse = Type.Object({
@@ -325,7 +325,11 @@ export const ErrorResponse = Type.Object({
 });
 
 export const ShareRequest = Type.Object({
-  path: Type.String({ description: 'The application path to share' })
+  path: Type.String({
+    description: 'The application path to share',
+    maxLength: 500,
+    pattern: '^/'
+  })
 });
 export type ShareRequest = Static<typeof ShareRequest>;
 

@@ -11,7 +11,7 @@ import {
 import { assert } from './utils';
 import { Log } from './log';
 import { DbManager } from './db/interface';
-import { SmbProtocol } from './smb';
+import { ISmbProtocol } from './smb';
 
 const SESSION_INACTIVE_THRESHOLD = 60_000;
 const SESSION_EXPIRED_THRESHOLD = 100_000; // used to exclude sessions from being returned to client
@@ -52,7 +52,7 @@ export class ProductionManager extends EventEmitter {
   }
 
   async checkUserStatus(
-    smb: SmbProtocol,
+    smb: ISmbProtocol,
     smbServerUrl: string,
     smbServerApiKey: string
   ) {
@@ -64,7 +64,7 @@ export class ProductionManager extends EventEmitter {
     const inactiveCutoff = new Date(Date.now() - SESSION_INACTIVE_THRESHOLD);
     const expiredCutoff = new Date(Date.now() - SESSION_EXPIRED_THRESHOLD);
 
-    {
+    try {
       // Get sessions that should be inactive
       const toInactivate = await this.dbManager.getSessionsByQuery({
         isWhip: { $ne: true } as any,
@@ -74,14 +74,16 @@ export class ProductionManager extends EventEmitter {
       });
 
       if (toInactivate.length) {
-        const results = await Promise.all(
+        const results = await Promise.allSettled(
           (toInactivate as any[]).map((s) =>
             this.dbManager.updateSession(String(s._id), {
               isActive: false
             })
           )
         );
-        if (results.some(Boolean)) hasChanged = true;
+        if (results.some((r) => r.status === 'fulfilled' && r.value)) {
+          hasChanged = true;
+        }
       }
 
       // Get sessions that should be active
@@ -93,12 +95,14 @@ export class ProductionManager extends EventEmitter {
       });
 
       if (toReactivate.length) {
-        const results = await Promise.all(
+        const results = await Promise.allSettled(
           (toReactivate as any[]).map((s) =>
             this.dbManager.updateSession(String(s._id), { isActive: true })
           )
         );
-        if (results.some(Boolean)) hasChanged = true;
+        if (results.some((r) => r.status === 'fulfilled' && r.value)) {
+          hasChanged = true;
+        }
       }
 
       // Get sessions that should be expired
@@ -109,7 +113,7 @@ export class ProductionManager extends EventEmitter {
       });
 
       if (toExpire.length) {
-        const results = await Promise.all(
+        const results = await Promise.allSettled(
           (toExpire as any[]).map((s) =>
             this.dbManager.updateSession(String(s._id), {
               isExpired: true,
@@ -117,8 +121,12 @@ export class ProductionManager extends EventEmitter {
             })
           )
         );
-        if (results.some(Boolean)) hasChanged = true;
+        if (results.some((r) => r.status === 'fulfilled' && r.value)) {
+          hasChanged = true;
+        }
       }
+    } catch (e) {
+      Log().warn('checkUserStatus: session lifecycle failed', e);
     }
 
     try {
@@ -229,7 +237,7 @@ export class ProductionManager extends EventEmitter {
         }
       }
     } catch (e) {
-      Log().warn('checkUserStatus (WHIP) failed', e);
+      Log().warn('checkUserStatus failed', e);
     }
 
     if (hasChanged) {

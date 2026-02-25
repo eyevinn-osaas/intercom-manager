@@ -1,5 +1,6 @@
 import fastifyCookie from '@fastify/cookie';
 import cors from '@fastify/cors';
+import helmet from '@fastify/helmet';
 import fastifyRateLimit from '@fastify/rate-limit';
 import swagger from '@fastify/swagger';
 import swaggerUI from '@fastify/swagger-ui';
@@ -70,11 +71,18 @@ export default async (opts: ApiOptions) => {
   // register the cookie plugin
   api.register(fastifyCookie);
 
+  // register security headers
+  api.register(helmet, {
+    contentSecurityPolicy: false // CSP managed per-deployment
+  });
+
   // register the cors plugin, configure it for better security
+  const corsOrigin = process.env.CORS_ORIGIN;
   api.register(cors, {
+    origin: corsOrigin ? corsOrigin.split(',') : false,
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization'],
-    exposedHeaders: ['Content-Type']
+    exposedHeaders: ['Content-Type', 'Location', 'ETag', 'Link']
   });
 
   await api.register(fastifyRateLimit, {
@@ -104,7 +112,8 @@ export default async (opts: ApiOptions) => {
     smbServerApiKey: opts.smbServerApiKey,
     dbManager: opts.dbManager,
     productionManager: opts.productionManager,
-    coreFunctions: opts.coreFunctions
+    coreFunctions: opts.coreFunctions,
+    smb: opts.smb
   });
   api.register(apiWhip, {
     prefix: 'api/v1',
@@ -114,7 +123,8 @@ export default async (opts: ApiOptions) => {
     coreFunctions: opts.coreFunctions,
     productionManager: opts.productionManager,
     dbManager: opts.dbManager,
-    whipAuthKey: opts.whipAuthKey
+    whipAuthKey: opts.whipAuthKey,
+    smb: opts.smb
   });
   api.register(apiWhep, {
     prefix: 'api/v1',
@@ -123,7 +133,9 @@ export default async (opts: ApiOptions) => {
     smbServerBaseUrl: opts.smbServerBaseUrl,
     coreFunctions: opts.coreFunctions,
     productionManager: opts.productionManager,
-    dbManager: opts.dbManager
+    dbManager: opts.dbManager,
+    whipAuthKey: opts.whipAuthKey,
+    smb: opts.smb
   });
   api.register(apiShare, { publicHost: opts.publicHost, prefix: 'api/v1' });
   api.register(apiReAuth, { prefix: 'api/v1' });
