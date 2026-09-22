@@ -14,6 +14,31 @@ if (!process.env.SMB_ADDRESS) {
   Log().warn('SMB_ADDRESS environment variable not set, using defaults');
 }
 
+if (!process.env.PUBLIC_HOST) {
+  Log().warn('PUBLIC_HOST is not set — falling back to localhost default');
+}
+
+if (
+  !process.env.DB_CONNECTION_STRING &&
+  !process.env.MONGODB_CONNECTION_STRING
+) {
+  Log().warn(
+    'DB_CONNECTION_STRING is not set — using localhost MongoDB default'
+  );
+}
+
+try {
+  const smbUrl = new URL(SMB_ADDRESS);
+  const localHosts = ['localhost', '127.0.0.1', '::1'];
+  if (smbUrl.protocol === 'http:' && !localHosts.includes(smbUrl.hostname)) {
+    Log().warn(
+      `SMB_ADDRESS uses plaintext http:// to a remote host (${smbUrl.hostname}); SDP/ICE data will be sent unencrypted. Use https:// in production.`
+    );
+  }
+} catch (err) {
+  Log().warn(`SMB_ADDRESS could not be parsed as a URL: ${SMB_ADDRESS}`);
+}
+
 const ENDPOINT_IDLE_TIMEOUT_S: string =
   process.env.ENDPOINT_IDLE_TIMEOUT_S ?? '60';
 

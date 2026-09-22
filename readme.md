@@ -74,6 +74,14 @@ The `osc_eyevinn_intercom_manager` resource requires these variables:
 | `ICE_SERVERS`               | Comma-separated list of ICE servers in the format: `turn:username:password@turn.example.com,stun:stun.example.com`. If no STUN server is provided, and WHIP endpoints are used, Google's default STUN server (`stun:stun.l.google.com:19302`) will be used. |
 | `MONGODB_CONNECTION_STRING` | DEPRECATED: Use `DB_CONNECTION_STRING` instead                                                                                                                                                                                                              |
 
+## Authentication
+
+Intercom Manager does not provide an authentication layer of its own, and that is by design. How access is controlled is deployment specific in most cases, so it belongs to whatever fronts the service rather than to the service itself.
+
+When the service runs on Eyevinn Open Source Cloud it sits behind the OSC provided auth wall, which authenticates every request before it reaches the API. The `GET /api/v1/reauth` endpoint exists to renew the token that wall issued. It requires `OSC_ACCESS_TOKEN` to be set, requests a fresh OSC service access token from the OSC token service, and stores it in the `eyevinn-intercom-manager.sat` cookie so that API calls continue to work as the previous token approaches expiry. When `OSC_ACCESS_TOKEN` is not set the service is not running in an OSC context and the endpoint responds with `405`.
+
+Contributors should not add an in-process authentication layer to the API. An extra auth level conflicts with the OSC auth wall and breaks current deploys and installations. The one bearer key already in the code, `WHIP_AUTH_KEY`, guards only the WHIP and WHEP ingest endpoints and is not a general API authentication mechanism.
+
 ## Installation / Usage
 
 Start an Intercom Manager instance:
@@ -90,7 +98,7 @@ The API docs is then available on `http://localhost:8000/api/docs/`
 
 ## Development
 
-Requires Node JS engine >= v18 and [MongoDB](https://www.mongodb.com/docs/manual/administration/install-community/) (tested with MongoDB v7) or [CouchDB](https://docs.couchdb.org/en/stable/index.html).
+Requires Node JS engine >= v22 (as enforced by the `engines` field in `package.json`) and [MongoDB](https://www.mongodb.com/docs/manual/administration/install-community/) (tested with MongoDB v7) or [CouchDB](https://docs.couchdb.org/en/stable/index.html).
 
 Install dependencies
 
@@ -112,53 +120,7 @@ SMB_ADDRESS=http://<smburl>:<smbport> SMB_APIKEY=<smbapikey> npm start
 
 See [Environment Variables](#environment-variables) for a full list of environment variables you can set. The default `DB_CONNECTION_STRING` is probably what you want to use for local development unless you use a remote db server.
 
-## Terraform infrastructure
-
-Requires terraform and AWS access
-
-```sh
-cd infra
-terraform init -var-file="dev.tfvars"
-```
-
-### Development workspace
-
-Create or select workspace `dev`
-
-```sh
-cd infra
-terraform workspace new dev
-```
-
-or
-
-```sh
-cd infra
-terraform workspace select dev
-```
-
-Create resources with variables for dev environment
-
-```sh
-terraform plan -var-file="dev.tfvars"
-terraform apply -var-file="dev.tfvars"
-```
-
-### Production workspace
-
-Create or select workspace `prod`
-
-```sh
-cd infra
-terraform workspace select prod
-```
-
-```sh
-terraform plan -var-file="prod.tfvars"
-terraform apply -var-file="prod.tfvars"
-```
-
-### Contributing
+## Contributing
 
 See [CONTRIBUTING](CONTRIBUTING.md)
 

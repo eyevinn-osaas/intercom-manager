@@ -1,5 +1,4 @@
 import { Type } from '@sinclair/typebox';
-import dotenv from 'dotenv';
 import { FastifyPluginCallback } from 'fastify';
 import { v4 as uuidv4 } from 'uuid';
 import { CoreFunctions } from './api_productions_core_functions';
@@ -26,7 +25,6 @@ import {
 } from './models';
 import { ProductionManager } from './production_manager';
 import { ISmbProtocol, SmbProtocol } from './smb';
-dotenv.config();
 
 export interface ApiProductionsOptions {
   smbServerBaseUrl: string;
@@ -733,8 +731,8 @@ const apiProductions: FastifyPluginCallback<ApiProductionsOptions> = (
             .send({ sessionId, sdp: sdpOffer });
         } else {
           reply.code(400).send({
-            message: 'Could not establish a media connection',
-            stackTrace: 'Failed to generate sdp offer for endpoint'
+            message:
+              'Could not establish a media connection: failed to generate sdp offer for endpoint'
           });
           return;
         }
@@ -756,7 +754,7 @@ const apiProductions: FastifyPluginCallback<ApiProductionsOptions> = (
           'Provide client local SDP description as request body to finalize connection protocol.',
         params: SessionIdParams,
         response: {
-          200: Type.String(),
+          204: Type.Null(),
           400: Type.String(),
           500: Type.String()
         }
@@ -918,19 +916,29 @@ const apiProductions: FastifyPluginCallback<ApiProductionsOptions> = (
       try {
         const timeoutMs = 25_000;
 
-        // Wait until either users:change fires or timeout expires
+        // Wait until users:change fires, the timeout expires, or the client
+        // disconnects. Cleanup runs once in every exit path so the listener and
+        // timer are always released and resolve is never called twice.
         await new Promise<void>((resolve) => {
-          const onChange = () => {
+          let settled = false;
+
+          const cleanup = () => {
+            if (settled) {
+              return;
+            }
+            settled = true;
             clearTimeout(timer);
+            productionManager.off('users:change', onChange);
+            request.raw.off('close', cleanup);
             resolve();
           };
 
-          const timer = setTimeout(() => {
-            productionManager.off('users:change', onChange);
-            resolve();
-          }, timeoutMs);
+          const onChange = () => cleanup();
+
+          const timer = setTimeout(cleanup, timeoutMs);
 
           productionManager.once('users:change', onChange);
+          request.raw.on('close', cleanup);
         });
 
         const { productionId, lineId } = request.params;
