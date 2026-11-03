@@ -174,7 +174,11 @@ export class ProductionManager extends EventEmitter {
             isExpired: false
           });
           if (ok) {
-            hasChanged = true;
+            // Only a state transition is visible to clients; a routine
+            // lastSeen refresh must not wake the participants long-polls.
+            if (!whipSession.isActive || whipSession.isExpired) {
+              hasChanged = true;
+            }
             if (this.userSessions[wid]) {
               this.userSessions[wid].lastSeen = now + 10_000;
               this.userSessions[wid].isActive = true;
@@ -205,7 +209,9 @@ export class ProductionManager extends EventEmitter {
             isExpired: false
           });
           if (ok) {
-            hasChanged = true;
+            if (!whipSession.isActive || whipSession.isExpired) {
+              hasChanged = true;
+            }
             if (this.userSessions[wid]) {
               this.userSessions[wid].lastSeen = now + 10_000;
               this.userSessions[wid].isActive = true;
@@ -500,6 +506,11 @@ export class ProductionManager extends EventEmitter {
     includeBuffer = false
   ): Promise<boolean> {
     const lastSeen = includeBuffer ? Date.now() + 10_000 : Date.now();
+    // Only a transition from inactive/expired to active is observable by
+    // clients; a plain heartbeat on an active session must not wake every
+    // participants long-poll (#425). Unknown prior state counts as a change.
+    const previous = await this.dbManager.getSession(sessionId);
+    const hasChanged = !previous || !previous.isActive || !!previous.isExpired;
     const ok = await this.dbManager.updateSession(sessionId, {
       lastSeen,
       isActive: true,
@@ -511,7 +522,9 @@ export class ProductionManager extends EventEmitter {
         this.userSessions[sessionId].isActive = true;
         this.userSessions[sessionId].isExpired = false;
       }
-      this.emit('users:change');
+      if (hasChanged) {
+        this.emit('users:change');
+      }
     }
     return ok;
   }

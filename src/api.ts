@@ -7,6 +7,7 @@ import swaggerUI from '@fastify/swagger-ui';
 import { TypeBoxTypeProvider } from '@fastify/type-provider-typebox';
 import { Static, Type } from '@sinclair/typebox';
 import fastify, { FastifyPluginCallback } from 'fastify';
+import { getApiDevices } from './api_devices';
 import { getApiIngests } from './api_ingests';
 import { ApiProductionsOptions, getApiProductions } from './api_productions';
 import apiGroups from './api_groups';
@@ -18,6 +19,7 @@ import { DbManager } from './db/interface';
 import { IngestManager } from './ingest_manager';
 import { ProductionManager } from './production_manager';
 import { resolveCorsOrigin } from './config/cors-origin';
+import { resolveTrustProxy } from './config/trust-proxy';
 import { createCsrfOriginHook } from './csrf';
 import { createAuthHook } from './roles';
 
@@ -70,7 +72,10 @@ export type ApiOptions = ApiGeneralOptions &
 
 export default async (opts: ApiOptions) => {
   const api = fastify({
-    ignoreTrailingSlash: true
+    ignoreTrailingSlash: true,
+    // Off by default; set TRUST_PROXY only behind a trusted reverse proxy so
+    // request.ip (and thus the rate-limit key) is the real client address.
+    trustProxy: resolveTrustProxy()
   }).withTypeProvider<TypeBoxTypeProvider>();
 
   // register the cookie plugin
@@ -226,6 +231,10 @@ export default async (opts: ApiOptions) => {
   api.register(getApiIngests(), {
     prefix: 'api/v1',
     dbManager: opts.dbManager,
+    ingestManager: opts.ingestManager
+  });
+  api.register(getApiDevices(), {
+    prefix: 'api/v1',
     ingestManager: opts.ingestManager
   });
 
